@@ -23,7 +23,7 @@ namespace Paket.VisualStudio.IntelliSense
         
         public string GetCharAt(int position)
         {
-            if (position < 0)
+            if (position < 0 || textSnapshot.Length == 0)
                 return "";
             return textSnapshot.GetText(position,1);
         }
