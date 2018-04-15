@@ -107,30 +107,37 @@ namespace Paket.VisualStudio.IntelliSense
 
         private static CompletionContext GetCompletionContext(PaketDocument paketDocument, ITextStructureNavigator navigator, SnapshotPoint position)
         {
-            TextExtent endPosition = navigator.GetExtentOfWord(position - 1);
-            TextExtent startPosition = endPosition;
+            var startPos = position.Position;
+            var pos = position;
+            var length = 0;
 
-            // try to extend the span over .
-            while (!String.IsNullOrWhiteSpace(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1)))
+            if (position.Position > 0)
             {
-                startPosition = navigator.GetExtentOfWord(startPosition.Span.Start - 2);
-            }
+                TextExtent endPosition = navigator.GetExtentOfWord(position - 1);
+                TextExtent startPosition = endPosition;
 
-            var startPos = startPosition.Span.Start.Position;
-            var length = endPosition.Span.End.Position - startPos;
-            var span = new Span(startPos,length);
+                // try to extend the span over .
+                while (!String.IsNullOrWhiteSpace(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1)))
+                {
+                    startPosition = navigator.GetExtentOfWord(startPosition.Span.Start - 2);
+                }
+
+                startPos = startPosition.Span.Start.Position;
+                length = endPosition.Span.End.Position - startPos;
+
+                pos = startPosition.Span.Start;
+                if (startPosition.Span.Start.Position > 0)
+                    pos = startPosition.Span.Start - 1;
+            }
+            var span = new Span(startPos, length);
             var snapShotSpan = new SnapshotSpan(position.Snapshot, span);
 
             var context = new CompletionContext(span);
 
-            var pos = startPosition.Span.Start;
-            if (startPosition.Span.Start.Position > 0)
-                pos = startPosition.Span.Start - 1;
-
             TextExtent previous = navigator.GetExtentOfWord(pos);
 
             // try to extend the span over blanks
-            while (paketDocument.GetCharAt(previous.Span.Start.Position) == " ")
+            while (paketDocument.GetCharAt(previous.Span.Start.Position) == " " && pos != 0)
             {
                 var pos2 = previous.Span.Start;
                 if (previous.Span.Start.Position > 0)
@@ -227,7 +234,6 @@ namespace Paket.VisualStudio.IntelliSense
                 {
                     startPosition = navigator.GetExtentOfWord(startPosition.Span.Start - 2);
                 }
-
 
                 startPos = startPosition.Span.Start.Position;
                 length = endPosition.Span.End.Position - startPos;
