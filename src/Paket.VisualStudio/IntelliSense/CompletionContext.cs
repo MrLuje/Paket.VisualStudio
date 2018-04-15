@@ -10,11 +10,18 @@ namespace Paket.VisualStudio.IntelliSense
         public ITextSnapshot Snapshot { get; set; }
         public IIntellisenseSession Session { get; set; }
         public CompletionContextType ContextType { get; set; }
+        public string LineKeyword { get; set; }
+        public string WordAtPosition { get; set; }
 
         public CompletionContext(Span span)
         {
             SpanStart = span.Start;
             SpanLength = span.Length;
+        }
+
+        public bool IsWordAtPosition()
+        {
+            return !string.IsNullOrWhiteSpace(WordAtPosition);
         }
 
         public string GetSearchTerm()

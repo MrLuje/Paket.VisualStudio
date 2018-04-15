@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Diagnostics;
 using System.Linq;
 using System.Windows.Media;
 using Microsoft.VisualStudio.Language.Intellisense;
@@ -110,7 +111,7 @@ namespace Paket.VisualStudio.IntelliSense
 
             ITrackingSpan trackingSpan =
                 textBuffer.CurrentSnapshot.CreateTrackingSpan(
-                    position <= context.SpanStart || position > context.SpanStart + context.SpanLength
+                    position <= context.SpanStart || position > context.SpanStart + context.SpanLength || !context.IsWordAtPosition()
                         ? new Span(position, 0)
                         : new Span(context.SpanStart, context.SpanLength), SpanTrackingMode.EdgeInclusive);
 
