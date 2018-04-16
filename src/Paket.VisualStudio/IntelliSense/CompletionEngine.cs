@@ -1,12 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition.Hosting;
+using System.Diagnostics;
 using System.Linq;
 using Microsoft.VisualStudio.ComponentModelHost;
 using Microsoft.VisualStudio.Language.Intellisense;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Text;
 using Microsoft.VisualStudio.Text.Operations;
+using Paket.VisualStudio.IntelliSense.Classifier;
 using Paket.VisualStudio.IntelliSense.CompletionProviders;
 
 namespace Paket.VisualStudio.IntelliSense
@@ -108,46 +110,43 @@ namespace Paket.VisualStudio.IntelliSense
         private static CompletionContext GetCompletionContext(PaketDocument paketDocument, ITextStructureNavigator navigator, SnapshotPoint position)
         {
             var startPos = position.Position;
-            var pos = position;
             var length = 0;
+            var previousWord = string.Empty;
+            var keywordSeparator = new List<string>() { " ", "," };
 
-            if (position.Position > 0)
+            var line = paketDocument.GetLineAt(position);
+            if (!string.IsNullOrWhiteSpace(line.GetText()))
             {
-                TextExtent endPosition = navigator.GetExtentOfWord(position - 1);
-                TextExtent startPosition = endPosition;
+                var endPosition = navigator.GetExtentOfWord(position - 1);
+                var startPosition = endPosition;
 
-                // try to extend the span over .
-                while (!String.IsNullOrWhiteSpace(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1)))
+                while (!(PaketDependenciesClassifier.ValidKeywords.Contains(startPosition.Span.GetText()) && keywordSeparator.Contains(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1))) && line.Start.Position < startPosition.Span.Start)
                 {
+                    // If prev char is a whitespace, we remember the sentence till now for the search term (like for nuget)
+                    if (String.IsNullOrWhiteSpace(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1)))
+                    {
+                        startPos = startPosition.Span.Start.Position;
+                        length = endPosition.Span.End.Position - startPos;
+                    }
                     startPosition = navigator.GetExtentOfWord(startPosition.Span.Start - 2);
+
+
+                    /*
+                     * Empty line => keyword
+                     * nuget => package from nuget.org
+                     *   => if there is a pacakge name and a space before the cursor, keyword related to nuget
+                     *   => if there is a keyword with a space or comma, keyword related to nuget
+                     */
                 }
 
-                startPos = startPosition.Span.Start.Position;
-                length = endPosition.Span.End.Position - startPos;
-
-                pos = startPosition.Span.Start;
-                if (startPosition.Span.Start.Position > 0)
-                    pos = startPosition.Span.Start - 1;
+                previousWord = startPosition.Span.GetText();
+                Debug.WriteLine($"Prev: {previousWord}, searchTerm: {new SnapshotSpan(position.Snapshot, new Span(startPos, length)).GetText()}");
             }
             var span = new Span(startPos, length);
             var snapShotSpan = new SnapshotSpan(position.Snapshot, span);
 
             var context = new CompletionContext(span);
-
-            TextExtent previous = navigator.GetExtentOfWord(pos);
-
-            // try to extend the span over blanks
-            while (paketDocument.GetCharAt(previous.Span.Start.Position) == " " && pos != 0)
-            {
-                var pos2 = previous.Span.Start;
-                if (previous.Span.Start.Position > 0)
-                    pos2 = previous.Span.Start - 1;
-
-                previous = navigator.GetExtentOfWord(pos2);
-            }
-            var lastWord = previous.Span.GetText();
-
-            switch(lastWord)
+            switch (previousWord)
             {
                 case "nuget": context.ContextType = CompletionContextType.NuGet; break;
                 case "source": context.ContextType = CompletionContextType.Source; break;
