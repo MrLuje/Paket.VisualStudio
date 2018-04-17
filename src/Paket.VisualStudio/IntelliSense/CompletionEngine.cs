@@ -107,12 +107,17 @@ namespace Paket.VisualStudio.IntelliSense
             return completionProviders.Where(provider => provider.ContextType == contextType);
         }
 
+        private static bool IsKeywordAtPosition(PaketDocument paketDocument, TextExtent startPosition)
+        {
+            var keywordSeparator = new List<string>() { " ", "," };
+            return PaketDependenciesClassifier.ValidKeywords.Contains(startPosition.Span.GetText()) && keywordSeparator.Contains(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1));
+        }
+
         private static CompletionContext GetCompletionContext(PaketDocument paketDocument, ITextStructureNavigator navigator, SnapshotPoint position)
         {
             var startPos = position.Position;
             var length = 0;
             var previousWord = string.Empty;
-            var keywordSeparator = new List<string>() { " ", "," };
 
             var line = paketDocument.GetLineAt(position);
             if (!string.IsNullOrWhiteSpace(line.GetText()))
@@ -120,10 +125,13 @@ namespace Paket.VisualStudio.IntelliSense
                 var endPosition = navigator.GetExtentOfWord(position - 1);
                 var startPosition = endPosition;
 
-                while (!(PaketDependenciesClassifier.ValidKeywords.Contains(startPosition.Span.GetText()) && keywordSeparator.Contains(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1))) && line.Start.Position < startPosition.Span.Start)
+                // Search for a keyword back in the same line
+                while (!IsKeywordAtPosition(paketDocument, startPosition) && line.Start.Position < startPosition.Span.Start)
                 {
-                    // If prev char is a whitespace, we remember the sentence till now for the search term (like for nuget)
-                    if (String.IsNullOrWhiteSpace(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1)))
+                    // If prev char is a whitespace, we remember the sentence till now for the search term (like for nugetsearch)
+                    var previousChar = paketDocument.GetCharAt(startPosition.Span.Start.Position - 1);
+
+                    if (string.IsNullOrWhiteSpace(previousChar))
                     {
                         startPos = startPosition.Span.Start.Position;
                         length = endPosition.Span.End.Position - startPos;
@@ -134,8 +142,25 @@ namespace Paket.VisualStudio.IntelliSense
                     /*
                      * Empty line => keyword
                      * nuget => package from nuget.org
-                     *   => if there is a pacakge name and a space before the cursor, keyword related to nuget
+                     *   => if there is a package name and a space before the cursor, keyword related to nuget
                      *   => if there is a keyword with a space or comma, keyword related to nuget
+                     *      => prerelease
+                     *      => strategy
+                     *      => lowest_matching
+                     *      => import_targets
+                     *      => storage
+                     *      => restriction
+                     *      => framework
+                     *      => content
+                     *      => redirects
+                     *      => version_in_path
+                     *      => license_download
+                     *      => condition
+                     *      => copy_content_to_output_dir
+                     *      => copy_local
+                     *      => specific_version
+                     *      => generate_load_scripts
+                     *      => redirects
                      */
                 }
 
