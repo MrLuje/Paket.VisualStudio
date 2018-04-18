@@ -11,11 +11,11 @@ namespace Paket.VisualStudio.IntelliSense.Classifier
     {
         private readonly IClassificationType keyword, comment;
 
-        private static readonly HashSet<string> validKeywords = new HashSet<string>
+        private static readonly HashSet<string> validKeywords;
+        private static readonly HashSet<string> nugetRelatedKeywords = new HashSet<string>
         {
-            "source", "nuget", "github", "gist", "http",
-            "content", "references", "redirects", "group",
-            "strategy", "framework", "version", "storage", "content",
+            "content", "references", "redirects",
+            "strategy", "framework", "storage", "content",
             "copy_content_to_output_dir", "copy_local", "import_targets",
             "download_license", "lowest_matching", "generate_load_scripts"
         };
@@ -23,6 +23,20 @@ namespace Paket.VisualStudio.IntelliSense.Classifier
         public static IEnumerable<string> ValidKeywords
         {
             get { return validKeywords; }
+        }
+
+        public static IEnumerable<string> ValidNugetKeywords
+        {
+            get { return nugetRelatedKeywords; }
+        }
+
+        static PaketDependenciesClassifier()
+        {
+            var keywords = new[]{
+                "source", "nuget", "github", "gist", "http","group", "version"
+            }.Concat(nugetRelatedKeywords);
+
+            validKeywords = new HashSet<string>(keywords);
         }
 
         internal PaketDependenciesClassifier(IClassificationTypeRegistryService registry)

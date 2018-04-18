@@ -99,17 +99,42 @@ namespace Paket.VisualStudio.IntelliSense
         private static IEnumerable<ICompletionListProvider> GetCompletionProviders(PaketDocument paketDocument, ITextStructureNavigator navigator, SnapshotPoint position, out CompletionContext context)
         {
             context = GetCompletionContext(paketDocument, navigator, position);
-            return GetCompletionProviders(context.ContextType);
+            return GetCompletionProviders(context);
         }
 
-        private static IEnumerable<ICompletionListProvider> GetCompletionProviders(CompletionContextType contextType)
+        private static IEnumerable<ICompletionListProvider> GetCompletionProviders(CompletionContext context)
         {
-            return completionProviders.Where(provider => provider.ContextType == contextType);
+            var matchingCompletionProviders = completionProviders.Where(provider => provider.ContextType == context.ContextType).ToList();
+
+            if (context.ContextType == CompletionContextType.NuGetKeyword)
+                matchingCompletionProviders.Add(
+                    new PaketMissingNugetKeywordCompletionListProvider(
+                        ExportProvider.GetExport<IGlyphService>().Value,
+                        GetMissingNugetKeyword(context.LineText, PaketDependenciesClassifier.ValidNugetKeywords)
+                    )
+                );
+
+            return matchingCompletionProviders;
+        }
+
+        /// <summary>
+        /// Returns nuget related keywords that are not already used in this line
+        /// </summary>
+        /// <param name="lineText"></param>
+        /// <param name="validNugetKeywords"></param>
+        /// <returns></returns>
+        private static IEnumerable<string> GetMissingNugetKeyword(string lineText, IEnumerable<string> validNugetKeywords)
+        {
+            foreach (var validNugetKeyword in validNugetKeywords)
+            {
+                if (!lineText.Contains(validNugetKeyword))
+                    yield return validNugetKeyword;
+            }
         }
 
         private static bool IsKeywordAtPosition(PaketDocument paketDocument, TextExtent startPosition)
         {
-            var keywordSeparator = new List<string>() { " ", "," };
+            var keywordSeparator = new HashSet<string>() { " ", "," };
             return PaketDependenciesClassifier.ValidKeywords.Contains(startPosition.Span.GetText()) && keywordSeparator.Contains(paketDocument.GetCharAt(startPosition.Span.Start.Position - 1));
         }
 
@@ -120,7 +145,12 @@ namespace Paket.VisualStudio.IntelliSense
             var previousWord = string.Empty;
 
             var line = paketDocument.GetLineAt(position);
-            if (!string.IsNullOrWhiteSpace(line.GetText()))
+            var lineTextTrimmed = line.GetText().Trim();
+            var isNugetLine = lineTextTrimmed.StartsWith("nuget");
+            var shouldShowNugetRelatedKeywordsOnly = isNugetLine && lineTextTrimmed.Contains(",");
+            var isExpectingPairEnd = lineTextTrimmed.EndsWith(":");
+
+            if (!string.IsNullOrWhiteSpace(lineTextTrimmed))
             {
                 var endPosition = navigator.GetExtentOfWord(position - 1);
                 var startPosition = endPosition;
@@ -128,49 +158,32 @@ namespace Paket.VisualStudio.IntelliSense
                 // Search for a keyword back in the same line
                 while (!IsKeywordAtPosition(paketDocument, startPosition) && line.Start.Position < startPosition.Span.Start)
                 {
-                    // If prev char is a whitespace, we remember the sentence till now for the search term (like for nugetsearch)
+                    // If prev char is a whitespace, we remember the sentence till now for the search term (like for nuget search)
                     var previousChar = paketDocument.GetCharAt(startPosition.Span.Start.Position - 1);
-
                     if (string.IsNullOrWhiteSpace(previousChar))
                     {
                         startPos = startPosition.Span.Start.Position;
                         length = endPosition.Span.End.Position - startPos;
                     }
                     startPosition = navigator.GetExtentOfWord(startPosition.Span.Start - 2);
-
-
-                    /*
-                     * Empty line => keyword
-                     * nuget => package from nuget.org
-                     *   => if there is a package name and a space before the cursor, keyword related to nuget
-                     *   => if there is a keyword with a space or comma, keyword related to nuget
-                     *      => prerelease
-                     *      => strategy
-                     *      => lowest_matching
-                     *      => import_targets
-                     *      => storage
-                     *      => restriction
-                     *      => framework
-                     *      => content
-                     *      => redirects
-                     *      => version_in_path
-                     *      => license_download
-                     *      => condition
-                     *      => copy_content_to_output_dir
-                     *      => copy_local
-                     *      => specific_version
-                     *      => generate_load_scripts
-                     *      => redirects
-                     */
                 }
 
                 previousWord = startPosition.Span.GetText();
-                Debug.WriteLine($"Prev: {previousWord}, searchTerm: {new SnapshotSpan(position.Snapshot, new Span(startPos, length)).GetText()}");
+                Debug.WriteLine($"PreviousWord: {previousWord}, SearchTerm: {new SnapshotSpan(position.Snapshot, new Span(startPos, length)).GetText()}");
             }
             var span = new Span(startPos, length);
             var snapShotSpan = new SnapshotSpan(position.Snapshot, span);
 
             var context = new CompletionContext(span);
+            context.Snapshot = snapShotSpan.Snapshot;
+            context.LineText = lineTextTrimmed;
+
+            if (shouldShowNugetRelatedKeywordsOnly && !isExpectingPairEnd)
+            {
+                context.ContextType = CompletionContextType.NuGetKeyword;
+                return context;
+            }
+
             switch (previousWord)
             {
                 case "nuget": context.ContextType = CompletionContextType.NuGet; break;
@@ -191,7 +204,6 @@ namespace Paket.VisualStudio.IntelliSense
                 default: context.ContextType = CompletionContextType.Keyword; break;
             }
 
-            context.Snapshot = snapShotSpan.Snapshot;
             return context;
         }
     }

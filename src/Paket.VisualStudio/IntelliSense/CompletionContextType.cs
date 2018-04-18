@@ -6,6 +6,7 @@ namespace Paket.VisualStudio.IntelliSense
         InstalledNuGet,
         Source,
         Keyword,
+        NuGetKeyword,
         Strategy,
         Framework,
         Version,
